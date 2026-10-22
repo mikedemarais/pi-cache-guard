@@ -29,6 +29,17 @@ describe("detectMiss", () => {
     expect(detectMiss([...prior, { type: "compaction" }], msg(T, usage(2, 0, 50_000)), price)).toBeUndefined();
   });
 
+  test("a model whose cache read costs as much as input has nothing to miss", () => {
+    // Venice's qwen-3-8-27b: $0.45/M either way.
+    const flat = (input: number, cacheRead: number) => ({ input, output: 100, cacheRead, cacheWrite: 0,
+      cost: { input: input * 0.45e-6, cacheWrite: 0, cacheRead: cacheRead * 0.45e-6 } });
+    const prior = [entry(msg(T - 10_000, flat(9_000, 13_000), "qwen-3-8-27b"))];
+    expect(detectMiss(prior, msg(T, flat(60_000, 0), "qwen-3-8-27b"), () => 0.45)).toBeUndefined();
+    // A free (subscription-priced) model still reports its misses: the quota is the cost.
+    const free = (input: number, cacheRead: number) => ({ input, output: 100, cacheRead, cacheWrite: 0, cost: { input: 0, cacheWrite: 0, cacheRead: 0 } });
+    expect(detectMiss([entry(msg(T - 10_000, free(2, 600_000)))], msg(T, free(601_000, 0)), () => 0)).toMatchObject({ kind: "miss" });
+  });
+
   test("a model switch; a cache_warm refresh counts as the previous request", () => {
     const prior = [entry(msg(T - 60_000, usage(2, 600_000, 0), "claude-sonnet-5-5"))];
     expect(noticeLine(detectMiss(prior, msg(T, usage(2, 0, 601_000)), price)!).text).toMatch(/^Cache miss after model switch: 600k/);

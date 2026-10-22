@@ -93,6 +93,8 @@ export function detectMiss(entries: readonly unknown[], message: AssistantLike, 
   const readPerToken = u.cacheRead > 0
     ? (u.cost?.cacheRead ?? 0) / u.cacheRead
     : (cacheReadPrice(message.provider, message.model) ?? 0) / 1_000_000;
+  // A priced model whose cache read costs as much as input saves nothing by caching.
+  if (paidPerToken > 0 && readPerToken >= paidPerToken * 0.99) return undefined; // 1%: float rounding
   const missedCost = missedTokens * Math.max(0, paidPerToken - readPerToken);
   if (missedTokens < MISS_MIN_TOKENS && missedCost < MISS_MIN_COST) return undefined;
   return {
