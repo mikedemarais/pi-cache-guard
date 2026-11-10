@@ -249,7 +249,7 @@ export default function cacheGuard(pi: ExtensionAPI, options: { herdr?: HerdrRep
     let drawn: { leaf: string | null | undefined; line: ReturnType<typeof noticeLine> | undefined } | undefined;
     const draw = () => {
       const leaf = ctx?.sessionManager.getLeafId();
-      if (drawn?.leaf !== leaf || !drawn) {
+      if (!drawn || drawn.leaf !== leaf) {
         const notice = ctx ? warmRunNotice(ctx.sessionManager.getBranch(), { ...entry, data: entry.data! }) : entry.data;
         drawn = { leaf, line: notice && noticeLine(notice) };
       }

@@ -108,7 +108,7 @@ export function detectMiss(entries: readonly unknown[], message: AssistantLike, 
 
 // Session entries that draw nothing in the transcript, so warms on either side of them are still
 // back to back.
-const INVISIBLE = new Set(["usage", "model_change", "thinking_level_change", "label", "session_info"]);
+const INVISIBLE = new Set(["usage", "model_change", "thinking_level_change", "label", "session_info", "context_edit"]);
 
 interface RunEntry { id?: string; type?: string; customType?: string; data?: unknown }
 
