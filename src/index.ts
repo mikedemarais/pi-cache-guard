@@ -14,7 +14,7 @@ import { type Lean, leanContext, trimStatus } from "./context.ts";
 import { HerdrReporter } from "./herdr.ts";
 import { JEV_LOGINS, type JevState, label, probe } from "./jev.ts";
 import { JEV_KEY_URL, JEV_PITCH } from "./lean.ts";
-import { type AssistantLike, NOTICE_TYPE, type Notice, detectMiss, noticeLine } from "./notices.ts";
+import { type AssistantLike, NOTICE_TYPE, type Notice, detectMiss, noticeLine, warmRunNotice } from "./notices.ts";
 import { Text } from "@earendil-works/pi-tui";
 import {
   DEFAULT_SETTINGS,
@@ -245,8 +245,25 @@ export default function cacheGuard(pi: ExtensionAPI, options: { herdr?: HerdrRep
 
   pi.registerEntryRenderer<Notice>(NOTICE_TYPE, (entry, _options, theme) => {
     if (!entry.data) return undefined;
-    const { text, color } = noticeLine(entry.data);
-    return new Text(theme.fg(color, text), 1, 0);
+    // Rendering runs every frame; the run changes only with the session leaf.
+    let drawn: { leaf: string | null | undefined; line: ReturnType<typeof noticeLine> | undefined } | undefined;
+    const draw = () => {
+      const leaf = ctx?.sessionManager.getLeafId();
+      if (drawn?.leaf !== leaf || !drawn) {
+        const notice = ctx ? warmRunNotice(ctx.sessionManager.getBranch(), { ...entry, data: entry.data! }) : entry.data;
+        drawn = { leaf, line: notice && noticeLine(notice) };
+      }
+      return drawn.line;
+    };
+    // A later warm of the same run draws nothing; this line, drawn again on every render, shows it.
+    if (!draw()) return undefined;
+    return {
+      render: (width: number) => {
+        const line = draw();
+        return line ? new Text(theme.fg(line.color, line.text), 1, 0).render(width) : [];
+      },
+      invalidate: () => {},
+    };
   });
   pi.on("agent_settled", (_event, context) => refresh(context, true));
   pi.on("message_start", (event, context) => {

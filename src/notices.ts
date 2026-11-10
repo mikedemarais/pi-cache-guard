@@ -106,6 +106,41 @@ export function detectMiss(entries: readonly unknown[], message: AssistantLike, 
   };
 }
 
+// Session entries that draw nothing in the transcript, so warms on either side of them are still
+// back to back.
+const INVISIBLE = new Set(["usage", "model_change", "thinking_level_change", "label", "session_info"]);
+
+interface RunEntry { id?: string; type?: string; customType?: string; data?: unknown }
+
+const warmNote = (entry: RunEntry): string | null => {
+  const data = entry.data as Notice | undefined;
+  return entry.type === "custom" && entry.customType === NOTICE_TYPE && data?.kind === "warm" ? (data.note ?? "") : null;
+};
+
+/**
+ * The notice to draw for `entry`. Back-to-back warm notices with the same note draw as one line
+ * with their total cost, as Pi (1.5.1+) draws its own warms: the first notice of a run draws it and
+ * reads the run again on every render, so later warms update that line, and the others draw
+ * nothing (`undefined`). Any other notice, or one not on `branch`, draws as it is.
+ */
+export function warmRunNotice(branch: readonly RunEntry[], entry: RunEntry & { data: Notice }): Notice | undefined {
+  const at = branch.findIndex((candidate) => candidate.id === entry.id);
+  const note = warmNote(entry);
+  if (at < 0 || note === null) return entry.data;
+  // Whether a run continues past branch[i]: another warm or a visible entry ends it.
+  const passes = (i: number) => warmNote(branch[i]!) === null && INVISIBLE.has(branch[i]!.type ?? "");
+  for (let i = at - 1; i >= 0; i--) {
+    if (warmNote(branch[i]!) === note) return undefined;
+    if (!passes(i)) break;
+  }
+  let cost = 0;
+  for (let i = at; i < branch.length; i++) {
+    if (warmNote(branch[i]!) === note) cost += (branch[i]!.data as { cost: number }).cost;
+    else if (!passes(i)) break;
+  }
+  return { ...(entry.data as Extract<Notice, { kind: "warm" }>), cost };
+}
+
 /** Pi's token format: 950, 1.2k, 601k, 1.4M. */
 export function formatTokens(count: number): string {
   if (count < 1000) return count.toString();

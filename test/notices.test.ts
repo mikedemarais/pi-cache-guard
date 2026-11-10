@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { detectMiss, noticeLine } from "../src/notices.ts";
+import { NOTICE_TYPE, detectMiss, noticeLine, warmRunNotice } from "../src/notices.ts";
 
 const T = Date.parse("2026-10-07T12:00:00Z");
 const usage = (input: number, cacheRead: number, cacheWrite: number) => ({
@@ -53,5 +53,38 @@ describe("detectMiss", () => {
   test("warm and compaction lines", () => {
     expect(noticeLine({ kind: "warm", cost: 0.0123 }).text).toBe("Cache warmed: $0.0123");
     expect(noticeLine({ kind: "compaction", tokens: 650_000, cost: 1.2 }).text).toBe("Compaction: 650k tokens billed (~$1.20)");
+  });
+});
+
+describe("warmRunNotice", () => {
+  const warm = (id: string, cost: number, note?: string) =>
+    ({ id, type: "custom", customType: NOTICE_TYPE, data: { kind: "warm" as const, cost, ...(note ? { note } : {}) } });
+  const pi = (id: string) => ({ id, type: "usage", kind: "cache_warm" });
+  const reply = (id: string) => ({ id, type: "message", message: { role: "assistant" } });
+  const line = (branch: any[], id: string) => {
+    const notice = warmRunNotice(branch, branch.find((e) => e.id === id));
+    return notice && noticeLine(notice).text;
+  };
+
+  test("back-to-back warms draw one line with their total, across Pi's own usage entries", () => {
+    const branch = [reply("r"), pi("u1"), warm("a", 0.01), pi("u2"), warm("b", 0.0123), warm("c", 0.002)];
+    expect(line(branch, "a")).toBe("Cache warmed: $0.0243");
+    expect(line(branch, "b")).toBeUndefined();
+    expect(line(branch, "c")).toBeUndefined();
+  });
+
+  test("a visible entry or another note starts a new line", () => {
+    const branch = [warm("a", 0.01), reply("r"), warm("b", 0.02), warm("c", 0.03, "1h"), warm("d", 0.04)];
+    expect(line(branch, "a")).toBe("Cache warmed: $0.010");
+    expect(line(branch, "b")).toBe("Cache warmed: $0.020");
+    expect(line(branch, "c")).toBe("Cache warmed (1h): $0.030");
+    expect(line(branch, "d")).toBe("Cache warmed: $0.040");
+  });
+
+  test("other notices, and a warm not on the branch, draw as they are", () => {
+    const miss = { id: "m", type: "custom", customType: NOTICE_TYPE, data: { kind: "compaction" as const, tokens: 1000, cost: 0 } };
+    expect(warmRunNotice([warm("a", 0.01), miss], miss)).toBe(miss.data);
+    const stray = warm("x", 0.5);
+    expect(warmRunNotice([warm("a", 0.01)], stray)).toBe(stray.data);
   });
 });

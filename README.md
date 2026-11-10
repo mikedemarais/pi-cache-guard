@@ -110,19 +110,21 @@ rows = [["state_icon", "workspace", { token = "$cache", fg = "#5f87d7", rules = 
 work; the opencode and Codex ports keep their own socket reporter. `"herdr": { "enabled": false }`
 turns it off.
 
-**Keeps the cache warm: not here.** Pi does that itself. Set `"cacheWarming": "idle"` in
-`~/.pi/agent/settings.json`: Pi then re-sends the last request with a one-token output cap at 90%
-of the TTL, between runs too, while the expected saving is at least $0.05 and for up to 30 minutes
-after the last real request (`/session` shows its next decision). Those refreshes are recorded as
-`cache_warm` usage entries, and this extension's clock counts the ones that hit the cache.
+**Keeps the cache warm: not here.** Pi does that itself. With `"cacheWarming": "idle"` (Pi's default
+since 1.5.1) in `~/.pi/agent/settings.json`, Pi re-sends the last request with a one-token output
+cap at 90% of the TTL, between runs too, while the expected saving is at least $0.05 and for up to
+30 minutes after the last real request (`/session` shows its next decision). Those refreshes are
+recorded as `cache_warm` usage entries, and this extension's clock counts the ones that hit the
+cache.
 
-**Notes misses in the transcript.** A line after each turn that re-billed a significant part of
-the conversation (`Cache miss after 12m idle: 600k tokens re-billed (~$2.88)`, from 20k tokens or
-$0.10), one for each keep-warm refresh (`Cache warmed: $0.0123`) and one for what a compaction
-billed. These are Pi's own `showCacheMissNotices` lines; that setting also prints `Anthropic
-dropped N thinking blocks` after every turn, so leave it off and let this extension print the
-cache lines. They are custom session entries (never sent to the model), so they show again on
-resume. `/cache-guard off` stops them for the session.
+**Notes misses in the transcript.** A line after each turn that re-billed a significant part of the
+conversation (`Cache miss after 12m idle: 600k tokens re-billed (~$2.88)`, from 20k tokens or
+$0.10), one for each run of back-to-back keep-warm refreshes with their total (`Cache warmed:
+$0.0123`, as Pi 1.5.1 draws its own) and one for what a compaction billed. These are Pi's own
+`showCacheMissNotices` lines; that setting also prints `Anthropic dropped N thinking blocks` after
+every turn, so leave it off and let this extension print the cache lines. They are custom session
+entries (never sent to the model), so they show again on resume. `/cache-guard off` stops them for
+the session.
 
 ## Setting up Jev
 
